@@ -78,6 +78,4 @@ pip install -r requirements.txt
 
 ## Demo
 
-<a href="course_images/ai110/pawpal_demo.png" target="_blank"><img src="course_images/ai110/pawpal_demo.png" alt="PawPal+ schedule screenshot" width="700"/></a>
-
-> Run `streamlit run app.py`, add a few tasks, then click **Generate schedule** to see the sorted plan, conflict warnings, and skipped-task summary.
+<a href="screenshot.png" target="_blank"><img src="screenshot.png" alt="PawPal+ schedule screenshot" width="700"/></a>
