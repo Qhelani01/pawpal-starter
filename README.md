@@ -22,6 +22,28 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Testing PawPal+
+
+Run the full test suite with:
+
+```bash
+python -m pytest tests/test_pawpal.py -v
+```
+
+### What the tests cover
+
+| Test | Behaviour verified |
+|---|---|
+| `test_task_completion` | `mark_complete()` flips `is_completed` to `True` |
+| `test_pet_task_addition` | `add_task()` increases the pet's task count |
+| `test_sort_by_time_returns_chronological_order` | `sort_by_time()` returns entries in HH:MM order |
+| `test_recurring_daily_task_creates_next_occurrence` | `spawn_recurring()` appends a new task due the next day |
+| `test_conflict_detection_flags_overlapping_slots` | `detect_conflicts()` catches overlapping time windows |
+| `test_no_conflict_when_slots_are_sequential` | Back-to-back tasks produce zero conflicts |
+| `test_empty_schedule_for_pet_with_no_tasks` | A pet with no tasks generates an empty schedule safely |
+
+**Confidence level: ★★★★☆** — Core scheduling behaviours (prioritisation, recurring tasks, conflict detection, sorting, filtering) are all covered. Edge cases like overlapping slots and empty pets pass. Untested areas include constraint checking and multi-day recurring plans.
+
 ## Getting started
 
 ### Setup
