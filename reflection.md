@@ -9,13 +9,14 @@ classDiagram
     class Task {
         +int id
         +String description
-        +int durationMins
+        +int duration_mins
         +String priority
         +String frequency
-        +String dueTime
-        +bool isCompleted
-        +markComplete()
-        +isHighPriority() bool
+        +String due_time
+        +bool is_completed
+        +mark_complete() None
+        +is_high_priority() bool
+        +next_occurrence(current_date: date) Task
     }
 
     class Pet {
@@ -23,44 +24,49 @@ classDiagram
         +String name
         +String species
         +int age
-        +String healthNotes
+        +String health_notes
         +List~Task~ tasks
-        +addTask(task: Task)
-        +getTasks() List~Task~
+        +add_task(task: Task) None
+        +get_tasks() List~Task~
     }
 
     class Owner {
         +int id
         +String name
         +String email
-        +float availableHours
-        +String preferredFeedingTime
-        +String preferredWalkTime
-        +List~String~ timesToAvoid
-        +int maxTasksPerSession
+        +float available_hours
+        +String preferred_feeding_time
+        +String preferred_walk_time
+        +List~String~ times_to_avoid
+        +int max_tasks_per_session
         +List~Pet~ pets
-        +addPet(pet: Pet)
-        +requestDailyPlan() Scheduler
+        +add_pet(pet: Pet) None
+        +request_daily_plan() Scheduler
     }
 
     class Scheduler {
         +Owner owner
         +List~Pet~ pets
         +List~Tuple~ schedule
-        +List~Task~ skippedTasks
-        +generatePlan()
-        +prioritizeTasks(tasks: List~Task~) List~Task~
-        +checkConstraints(task: Task, proposedStart: String) bool
-        +getSummary() String
-        +explainPlan() String
-        +explainSkipped(task: Task) String
+        +List~Task~ skipped_tasks
+        +generate_plan() None
+        +prioritize_tasks(tasks: List~Task~) List~Task~
+        +check_constraints(task: Task, proposed_start: String) bool
+        +sort_by_time() List~Tuple~
+        +filter_tasks(pet_name, completed) List~Tuple~
+        +detect_conflicts() List~String~
+        +spawn_recurring(pet: Pet, task: Task) None
+        +get_summary() String
+        +explain_plan() String
+        +explain_skipped(task: Task) String
     }
 
     Owner "1" --> "0..*" Pet : owns
     Pet "1" --> "0..*" Task : has
-    Scheduler --> Owner : uses
-    Scheduler --> Pet : schedules for
-    Scheduler --> Task : prioritizes
+    Owner "1" --> "1" Scheduler : creates via request_daily_plan()
+    Scheduler "1" --> "1" Owner : uses constraints from
+    Scheduler "1" --> "0..*" Pet : schedules tasks for
+    Scheduler "1" --> "0..*" Task : prioritizes and slots
 ```
 
 I included the following classes:
@@ -194,8 +200,7 @@ The `detect_conflicts()` method flags two tasks as conflicting only if their `[s
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+One moment where I did not accept an AI suggestion as-is was during the conflict detection implementation. The AI initially suggested checking conflicts by comparing only the start times of tasks (flagging any two tasks that started within the same minute). I recognized this would produce false positives for tasks that start close together but don't actually overlap, and would miss genuine overlaps where one task ends after the next one starts. I evaluated the suggestion by drawing out a few example time windows on paper, then replaced it with the standard interval-overlap condition `start_a < end_b and start_b < end_a`, which correctly handles all overlap cases. I verified the fix by manually injecting an overlapping entry in `main.py` and confirming a conflict was reported, and by running the sequential no-conflict test to confirm it produced zero warnings.
 
 ---
 
@@ -203,13 +208,21 @@ The `detect_conflicts()` method flags two tasks as conflicting only if their `[s
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+Seven behaviors were tested across two phases:
+
+1. `mark_complete()` — ensures task completion status flips correctly; important because the UI and recurring logic depend on this flag.
+2. `add_task()` — verifies that adding a task increases the pet's task count; important as the foundation for every other feature.
+3. `sort_by_time()` — confirms the schedule is returned in HH:MM chronological order; important for the UI to display tasks in a readable sequence.
+4. `spawn_recurring()` — checks that a daily task is marked complete and a new task is added with tomorrow's date; important because recurring logic is easy to get wrong with date arithmetic.
+5. `detect_conflicts()` with overlapping entries — verifies that a manually injected clash produces at least one CONFLICT warning; important because the generate_plan method avoids conflicts by design, so the only way to test detection is injection.
+6. `detect_conflicts()` with sequential tasks — confirms back-to-back tasks produce zero warnings; guards against false positives.
+7. Empty pet schedule — ensures a pet with no tasks generates an empty schedule without crashing; important for defensive robustness.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+Confidence level: ★★★★☆
+
+The core scheduling behaviors (prioritization, recurrence, conflict detection, sorting, filtering, edge cases) all pass. The main untested area is `check_constraints()`, which currently returns `None` (a stub). If I had more time, I would test: (1) that tasks exceeding the owner's available hours are correctly skipped even when high priority, (2) that `times_to_avoid` slots are respected during scheduling, and (3) multi-pet scheduling where two pets share the same time window.
 
 ---
 
@@ -217,12 +230,12 @@ The `detect_conflicts()` method flags two tasks as conflicting only if their `[s
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+The part I am most satisfied with is the simplification from 9 classes down to 4. The original design felt over-engineered — having separate `Constraint`, `DailyPlan`, `ScheduledTask`, and `ExplanationEngine` classes added a lot of coordination overhead without adding real value. Merging them all into `Scheduler` made the code easier to read, test, and extend. The tuple-based schedule `(Pet, Task, start_time, end_time)` turned out to be a clean and flexible data structure that worked well for sorting, filtering, and conflict detection without needing a separate class.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+If I had another iteration, I would implement `check_constraints()` properly so that the `times_to_avoid` list and preferred time windows actually influence when tasks are placed in the schedule — right now they are stored but never used. I would also add a frequency input to the task form in the UI so users can mark tasks as daily or weekly, and wire `spawn_recurring()` to a "Mark done" button so the next occurrence is created automatically from the interface.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+The most important thing I learned is that AI is a powerful collaborator for generating structure quickly, but the human engineer has to stay in the lead on design decisions. When AI suggested splitting responsibilities into 9 classes, it was technically correct, but it was my judgment call to simplify down to 4. That decision made every subsequent phase easier. Being the "lead architect" means using AI to accelerate implementation while actively pushing back when a suggestion adds complexity that the problem doesn't actually require.

@@ -44,6 +44,18 @@ python -m pytest tests/test_pawpal.py -v
 
 **Confidence level: ★★★★☆** — Core scheduling behaviours (prioritisation, recurring tasks, conflict detection, sorting, filtering) are all covered. Edge cases like overlapping slots and empty pets pass. Untested areas include constraint checking and multi-day recurring plans.
 
+## Features
+
+| Feature | Description |
+|---|---|
+| **Owner & pet setup** | Enter owner name, available hours, pet name, and species |
+| **Task management** | Add tasks with title, duration, priority, and due time |
+| **Priority scheduling** | High-priority tasks are always scheduled first |
+| **Sorting by time** | Schedule is displayed in chronological start-time order |
+| **Conflict warnings** | Overlapping time slots are flagged with `⚠ CONFLICT` messages |
+| **Daily recurrence** | Recurring tasks auto-generate the next occurrence when completed |
+| **Skipped task tracking** | Tasks that don't fit the available time are listed separately |
+
 ## Getting started
 
 ### Setup
@@ -63,3 +75,9 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Demo
+
+<a href="course_images/ai110/pawpal_demo.png" target="_blank"><img src="course_images/ai110/pawpal_demo.png" alt="PawPal+ schedule screenshot" width="700"/></a>
+
+> Run `streamlit run app.py`, add a few tasks, then click **Generate schedule** to see the sorted plan, conflict warnings, and skipped-task summary.
