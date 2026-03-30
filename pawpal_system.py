@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import List, Tuple, Optional
 
 
@@ -23,6 +24,20 @@ class Task:
     def is_high_priority(self) -> bool:
         """Return True if this task has high priority."""
         return self.priority == "high"
+
+    def next_occurrence(self, current_date: date) -> "Task":
+        """Return a new incomplete Task instance due on the next daily or weekly date."""
+        delta = timedelta(days=1) if self.frequency == "daily" else timedelta(weeks=1)
+        next_date = current_date + delta
+        return Task(
+            id=self.id + 1000,
+            description=self.description,
+            duration_mins=self.duration_mins,
+            priority=self.priority,
+            frequency=self.frequency,
+            due_time=f"{next_date.isoformat()} {self.due_time}",
+            is_completed=False,
+        )
 
 
 @dataclass
@@ -136,6 +151,42 @@ class Scheduler:
     def check_constraints(self, task: Task, proposed_start: str) -> bool:
         """Return True if the task can be scheduled at proposed_start given the owner's time limits and avoided slots."""
         pass
+
+    def sort_by_time(self) -> List[Tuple[Pet, Task, str, str]]:
+        """Return schedule entries sorted by start_time in HH:MM order."""
+        return sorted(self.schedule, key=lambda entry: entry[2])
+
+    def filter_tasks(
+        self, pet_name: Optional[str] = None, completed: Optional[bool] = None
+    ) -> List[Tuple[Pet, Task, str, str]]:
+        """Return schedule entries filtered by pet name and/or completion status."""
+        result = self.schedule
+        if pet_name is not None:
+            result = [e for e in result if e[0].name.lower() == pet_name.lower()]
+        if completed is not None:
+            result = [e for e in result if e[1].is_completed == completed]
+        return result
+
+    def detect_conflicts(self) -> List[str]:
+        """Return a list of warning strings for any two schedule entries whose time slots overlap."""
+        warnings = []
+        entries = self.schedule
+        for i in range(len(entries)):
+            for j in range(i + 1, len(entries)):
+                pet_a, task_a, start_a, end_a = entries[i]
+                pet_b, task_b, start_b, end_b = entries[j]
+                if start_a < end_b and start_b < end_a:
+                    warnings.append(
+                        f"CONFLICT: '{task_a.description}' ({pet_a.name}, {start_a}–{end_a}) "
+                        f"overlaps '{task_b.description}' ({pet_b.name}, {start_b}–{end_b})"
+                    )
+        return warnings
+
+    def spawn_recurring(self, pet: Pet, task: Task) -> None:
+        """If task is recurring, mark it complete and add the next occurrence to the pet's task list."""
+        task.mark_complete()
+        if task.frequency in ("daily", "weekly"):
+            pet.add_task(task.next_occurrence(date.today()))
 
     # --- Plan output ---
 

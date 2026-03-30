@@ -6,38 +6,7 @@
 
 ```mermaid
 classDiagram
-    class PetOwner {
-        +int id
-        +String name
-        +String email
-        +float availableHours
-        +List~Pet~ pets
-        +OwnerPreference preferences
-        +requestDailyPlan() DailyPlan
-        +addPet(pet: Pet)
-    }
-
-    class OwnerPreference {
-        +String preferredFeedingTime
-        +String preferredWalkTime
-        +List~String~ timesToAvoid
-        +int maxTasksPerSession
-        +getPreferredTimes() List~String~
-        +getTimesToAvoid() List~String~
-    }
-
-    class Pet {
-        +int id
-        +String name
-        +String species
-        +int age
-        +String healthNotes
-        +List~PetCareTask~ tasks
-        +addTask(task: PetCareTask)
-        +getTasks() List~PetCareTask~
-    }
-
-    class PetCareTask {
+    class Task {
         +int id
         +String description
         +int durationMins
@@ -49,59 +18,49 @@ classDiagram
         +isHighPriority() bool
     }
 
-    class Constraint {
-        +String type
-        +String description
-        +String timeWindow
-        +bool isRequired
-        +isSatisfied(task: PetCareTask) bool
-        +getTimeWindow() String
+    class Pet {
+        +int id
+        +String name
+        +String species
+        +int age
+        +String healthNotes
+        +List~Task~ tasks
+        +addTask(task: Task)
+        +getTasks() List~Task~
     }
 
-    class DailyPlan {
-        +String date
-        +List~ScheduledTask~ scheduledTasks
-        +float totalTimeUsed
-        +addTask(task: ScheduledTask)
-        +getTotalTime() float
-        +getSummary() String
-    }
-
-    class ScheduledTask {
-        +PetCareTask task
-        +String startTime
-        +String endTime
-        +String status
-        +getDuration() int
-        +markComplete()
-        +isCompleted() bool
-    }
-
-    class Planner {
-        +PetOwner owner
+    class Owner {
+        +int id
+        +String name
+        +String email
+        +float availableHours
+        +String preferredFeedingTime
+        +String preferredWalkTime
+        +List~String~ timesToAvoid
+        +int maxTasksPerSession
         +List~Pet~ pets
-        +List~Constraint~ constraints
-        +generateDailyPlan() DailyPlan
-        +prioritizeTasks(tasks: List~PetCareTask~) List~PetCareTask~
-        +checkConstraints(task: PetCareTask) bool
+        +addPet(pet: Pet)
+        +requestDailyPlan() Scheduler
     }
 
-    class ExplanationEngine {
-        +DailyPlan plan
+    class Scheduler {
+        +Owner owner
+        +List~Pet~ pets
+        +List~Tuple~ schedule
+        +List~Task~ skippedTasks
+        +generatePlan()
+        +prioritizeTasks(tasks: List~Task~) List~Task~
+        +checkConstraints(task: Task, proposedStart: String) bool
+        +getSummary() String
         +explainPlan() String
-        +explainDelay(task: PetCareTask) String
-        +summarizeReasoning() String
+        +explainSkipped(task: Task) String
     }
 
-    PetOwner "1" --> "1" OwnerPreference : has
-    PetOwner "1" --> "0..*" Pet : owns
-    Pet "1" --> "0..*" PetCareTask : has
-    PetCareTask "1" --> "0..*" Constraint : subject to
-    DailyPlan "1" --> "0..*" ScheduledTask : contains
-    ScheduledTask "1" --> "1" PetCareTask : schedules
-    Planner --> PetOwner : uses
-    Planner --> DailyPlan : generates
-    ExplanationEngine --> DailyPlan : explains
+    Owner "1" --> "0..*" Pet : owns
+    Pet "1" --> "0..*" Task : has
+    Scheduler --> Owner : uses
+    Scheduler --> Pet : schedules for
+    Scheduler --> Task : prioritizes
 ```
 
 I included the following classes:
@@ -155,11 +114,29 @@ Its responsibility is to describe why certain tasks were chosen first, why some 
 
 ⸻
 
-
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+After reviewing the skeleton, four issues were identified and fixed:
+
+1. Added 'pet' field to 'ScheduledTask'
+   The original 'ScheduledTask' only held a 'PetCareTask', with no reference to which 'Pet' the slot belonged to. To display the plan clearly (e.g. "Walk Buddy at 07:00") the scheduled slot must know its pet directly, without having to search every pet's task list.
+
+2. Added 'skipped_tasks' to 'Planner' and 'ExplanationEngine'
+   'ExplanationEngine.explain_delay()' is supposed to explain why a task was skipped — but skipped tasks never appear in the 'DailyPlan'. 
+   - The 'Planner' now tracks 'skipped_tasks: List[PetCareTask]' during scheduling and passes that list to 'ExplanationEngine', giving it the data it needs to explain omissions.
+
+3. Renamed 'Planner.constraints' → 'global_constraints' and added a distinction
+   Both 'Planner' and 'PetCareTask' had a 'constraints' field with no clear separation of responsibility. Renamed the planner's field to 'global_constraints' (owner-level rules that apply to the whole day, e.g. "unavailable 12:00–13:00") to distinguish it from task-level constraints (e.g. "medication must be given between 08:00–09:00"). Updated 'check_constraints()' doc to reflect that it checks both sources.
+
+4. Clarified 'PetOwner.request_daily_plan()' relationship to 'Planner'
+   The original docstring said "trigger the Planner" but 'PetOwner' held no reference to one. Clarified in the docstring that this method is responsible for instantiating a 'Planner(self)' and returning its result, making the ownership of that relationship explicit.
+
+5. Simplified from 9 classes down to 4: Task, Pet, Owner, Scheduler
+   The original design spread responsibility across too many small classes, making the system harder to follow. The following merges were made:
+   - 'PetCareTask' → renamed 'Task' (simpler name, same responsibility)
+   - 'OwnerPreference' → merged into 'Owner' (preferences are direct fields; no reason to split them into a separate object when they always belong to one owner)
+   - 'Constraint', 'DailyPlan', 'ScheduledTask', 'ExplanationEngine' → all merged into 'Scheduler' (these classes only existed to support scheduling logic; consolidating them into 'Scheduler' removes the coordination overhead and keeps all scheduling decisions in one place)
+   The schedule is now stored as a list of '(Pet, Task, start_time, end_time)' tuples inside 'Scheduler', and explanation methods live on 'Scheduler' directly.
 
 ---
 
@@ -201,14 +178,19 @@ A plan that ignores the owner’s available time is unrealistic and likely won�
 	•	Lower-priority tasks are flexible
 Tasks like grooming or enrichment can often be delayed or moved to another day without serious consequences.
 
+**Additional algorithmic tradeoff (Phase 4):** Conflict detection uses exact time-slot matching rather than checking overlapping durations.
+
+The `detect_conflicts()` method flags two tasks as conflicting only if their `[start, end)` intervals literally overlap in the schedule string. This catches hard clashes (e.g. "08:00–08:30" vs "08:10–08:30") but will miss soft overruns — for example, if a task runs longer than expected and bleeds into the next slot. Exact matching was chosen because it is simple to reason about and avoids false positives from estimated durations. A future improvement could track actual elapsed time and re-check the schedule dynamically.
+
 ---
 
 ## 3. AI Collaboration
 
 **a. How you used AI**
 
-- Design brainstorming, Debugging, Building the App
+- Design brainstorming, Reviewing UML and skeleon, Debugging, Building the App
 - "Refer to the reflection.md file to understand the structure of the app and build accordingly, do not add extra stuff, stick to the guidelines"
+- 
 
 **b. Judgment and verification**
 
